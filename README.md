@@ -52,12 +52,63 @@ The build reads secrets from environment variables only; nothing is stored in th
 | `PRIVATE_KEY_PASSWORD` | `signPlugin` | Password of the private key |
 | `PUBLISH_TOKEN` | `publishPlugin` | JetBrains Marketplace token |
 
-1. Create a signing certificate as described in
-   [Plugin Signing](https://plugins.jetbrains.com/docs/intellij/plugin-signing.html).
-2. Upload the **first** version by hand on [JetBrains Marketplace](https://plugins.jetbrains.com/plugin/add):
-   build it with `./gradlew signPlugin` and upload `build/distributions/LayoutManagerPlugin-<version>-signed.zip`.
-3. Create a token under **My Tokens** in your Marketplace profile.
-4. Publish later versions with `./gradlew publishPlugin` (signs, verifies and uploads).
+### 1. Create a signing key and certificate
+
+The plugin signer supports ECDSA, RSA and DSA keys (not Ed25519). These steps create an ECDSA key on the P-384
+curve, protected by a password, in `~/.jetbrains-signing`. Keep that folder and the password private and backed up:
+later versions must be signed with the same key. OpenSSL is included in Git for Windows.
+
+Windows PowerShell (OpenSSL is not on its `PATH`, so it is called by its full path):
+
+```powershell
+$openssl = 'C:\Program Files\Git\ucrt64\bin\openssl.exe'
+New-Item -ItemType Directory -Force ~\.jetbrains-signing | Out-Null
+Set-Location ~\.jetbrains-signing
+& $openssl genpkey -algorithm EC -pkeyopt ec_paramgen_curve:P-384 -aes-256-cbc -out private_encrypted.pem
+& $openssl req -key private_encrypted.pem -new -x509 -days 3650 -sha384 -out chain.crt
+```
+
+Git Bash:
+
+```bash
+mkdir -p ~/.jetbrains-signing && cd ~/.jetbrains-signing
+openssl genpkey -algorithm EC -pkeyopt ec_paramgen_curve:P-384 -aes-256-cbc -out private_encrypted.pem
+openssl req -key private_encrypted.pem -new -x509 -days 3650 -sha384 -out chain.crt
+```
+
+`genpkey` asks for the key password twice; `req` asks for it again and for the certificate details (for example
+`Luna Project` as the organization). In Git Bash, do not pass the details with `-subj "/CN=…"`: the shell rewrites the
+leading `/` into a Windows path.
+
+### 2. Sign the plugin
+
+Set the variables in the same terminal, then sign. Replace `<password>` with the key password.
+
+```powershell
+$env:CERTIFICATE_CHAIN = Get-Content -Raw ~\.jetbrains-signing\chain.crt
+$env:PRIVATE_KEY = Get-Content -Raw ~\.jetbrains-signing\private_encrypted.pem
+$env:PRIVATE_KEY_PASSWORD = '<password>'
+.\gradlew.bat signPlugin
+```
+
+```bash
+export CERTIFICATE_CHAIN="$(cat ~/.jetbrains-signing/chain.crt)"
+export PRIVATE_KEY="$(cat ~/.jetbrains-signing/private_encrypted.pem)"
+export PRIVATE_KEY_PASSWORD='<password>'
+./gradlew signPlugin
+```
+
+The result is `build/distributions/LayoutManagerPlugin-<version>-signed.zip`. To check the signature, run
+`verifyPluginSignature` afterwards as a separate command (Gradle rejects running both tasks in one command).
+
+### 3. Publish
+
+1. Upload the **first** version by hand on [JetBrains Marketplace](https://plugins.jetbrains.com/plugin/add):
+   the signed ZIP, license LGPL 2.1, source code `https://github.com/LunaProject-Discord/LayoutManager`.
+2. Create a token under **My Tokens** in your Marketplace profile and set it as `PUBLISH_TOKEN`.
+3. Publish later versions with `publishPlugin` (signs, verifies and uploads), with the variables above set.
+
+See also [Plugin Signing](https://plugins.jetbrains.com/docs/intellij/plugin-signing.html).
 
 ## License
 
@@ -110,11 +161,62 @@ JDK 25 は Gradle のツールチェーンで自動的に用意されます。
 
 秘密の情報は環境変数からのみ読み込み、リポジトリには保存しません (変数の一覧は英語版の表を参照)。
 
-1. [Plugin Signing](https://plugins.jetbrains.com/docs/intellij/plugin-signing.html) の手順で署名用の証明書を作成します。
-2. **最初の**バージョンは [JetBrains Marketplace](https://plugins.jetbrains.com/plugin/add) から手動でアップロードします。
-   `./gradlew signPlugin` でビルドし、`build/distributions/LayoutManagerPlugin-<バージョン>-signed.zip` をアップロードしてください。
-3. Marketplace のプロフィールの **My Tokens** でトークンを作成します。
-4. 2回目以降は `./gradlew publishPlugin` で公開できます (署名・検証・アップロードを行います)。
+#### 1. 署名用の鍵と証明書を作る
+
+署名ツールが対応している鍵は ECDSA、RSA、DSA です (Ed25519 には対応していません)。以下の手順では、パスワードで保護した
+P-384 曲線の ECDSA 鍵を `~/.jetbrains-signing` に作ります。このフォルダーとパスワードは他人に渡さず、控えを取っておいてください。
+以後の更新も同じ鍵で署名する必要があります。OpenSSL は Git for Windows に含まれています。
+
+Windows PowerShell (OpenSSL が `PATH` にないため、フルパスで呼び出します):
+
+```powershell
+$openssl = 'C:\Program Files\Git\ucrt64\bin\openssl.exe'
+New-Item -ItemType Directory -Force ~\.jetbrains-signing | Out-Null
+Set-Location ~\.jetbrains-signing
+& $openssl genpkey -algorithm EC -pkeyopt ec_paramgen_curve:P-384 -aes-256-cbc -out private_encrypted.pem
+& $openssl req -key private_encrypted.pem -new -x509 -days 3650 -sha384 -out chain.crt
+```
+
+Git Bash:
+
+```bash
+mkdir -p ~/.jetbrains-signing && cd ~/.jetbrains-signing
+openssl genpkey -algorithm EC -pkeyopt ec_paramgen_curve:P-384 -aes-256-cbc -out private_encrypted.pem
+openssl req -key private_encrypted.pem -new -x509 -days 3650 -sha384 -out chain.crt
+```
+
+`genpkey` では鍵のパスワードを2回、`req` ではそのパスワードと証明書の情報 (組織名に `Luna Project` など) を聞かれます。
+Git Bash では `-subj "/CN=…"` で情報を渡さないでください。先頭の `/` が Windows のパスに書き換えられてエラーになります。
+
+#### 2. 署名する
+
+同じターミナルで環境変数を設定してから署名します。`<パスワード>` は鍵のパスワードに置き換えてください。
+
+```powershell
+$env:CERTIFICATE_CHAIN = Get-Content -Raw ~\.jetbrains-signing\chain.crt
+$env:PRIVATE_KEY = Get-Content -Raw ~\.jetbrains-signing\private_encrypted.pem
+$env:PRIVATE_KEY_PASSWORD = '<パスワード>'
+.\gradlew.bat signPlugin
+```
+
+```bash
+export CERTIFICATE_CHAIN="$(cat ~/.jetbrains-signing/chain.crt)"
+export PRIVATE_KEY="$(cat ~/.jetbrains-signing/private_encrypted.pem)"
+export PRIVATE_KEY_PASSWORD='<パスワード>'
+./gradlew signPlugin
+```
+
+`build/distributions/LayoutManagerPlugin-<バージョン>-signed.zip` ができます。署名を確認する場合は、続けて
+`verifyPluginSignature` を別のコマンドとして実行してください (1つのコマンドで両方を実行すると Gradle がエラーにします)。
+
+#### 3. 公開する
+
+1. **最初の**バージョンは [JetBrains Marketplace](https://plugins.jetbrains.com/plugin/add) から手動でアップロードします。
+   署名済みの ZIP をアップロードし、ライセンスに LGPL 2.1、ソースコードに `https://github.com/LunaProject-Discord/LayoutManager` を指定します。
+2. Marketplace のプロフィールの **My Tokens** でトークンを作成し、`PUBLISH_TOKEN` に設定します。
+3. 2回目以降は、上の環境変数を設定したうえで `publishPlugin` を実行すると公開できます (署名・検証・アップロードを行います)。
+
+[Plugin Signing](https://plugins.jetbrains.com/docs/intellij/plugin-signing.html) も参照してください。
 
 ### ライセンス
 
