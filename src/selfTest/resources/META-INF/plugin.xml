@@ -1,0 +1,14 @@
+<!-- Test-only plugin used by `./gradlew selfTest`; never published. -->
+<idea-plugin>
+    <id>jp.lunaproject.layoutmanager.selftest</id>
+    <name>Layout Manager Self-Test</name>
+    <vendor>Luna Project</vendor>
+    <description>In-IDE self-test for the Layout Manager plugin. Installed only into the self-test sandbox.</description>
+
+    <depends>com.intellij.modules.platform</depends>
+    <depends>jp.lunaproject.layoutmanager</depends>
+
+    <extensions defaultExtensionNs="com.intellij">
+        <postStartupActivity implementation="jp.lunaproject.layoutmanager.selftest.SelfTestActivity"/>
+    </extensions>
+</idea-plugin>
