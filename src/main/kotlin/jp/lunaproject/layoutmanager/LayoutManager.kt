@@ -1,9 +1,12 @@
 package jp.lunaproject.layoutmanager
 
+import com.intellij.openapi.actionSystem.ActionManager
+import com.intellij.openapi.actionSystem.AnActionEvent
+import com.intellij.openapi.actionSystem.ex.ActionUtil
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.project.ProjectManager
-import jp.lunaproject.layoutmanager.engine.DesktopLayoutEngine
 import jp.lunaproject.layoutmanager.engine.LayoutEngine
+import jp.lunaproject.layoutmanager.engine.PreciseLayoutEngine
 import jp.lunaproject.layoutmanager.model.LayoutRef
 import jp.lunaproject.layoutmanager.model.LayoutScope
 import jp.lunaproject.layoutmanager.storage.GlobalLayoutStore
@@ -59,15 +62,27 @@ object LayoutManager {
     }
 
     /** Whether [restoreFactoryDefault] can run in this IDE. */
-    val isFactoryDefaultAvailable: Boolean get() = DesktopLayoutEngine.isAvailable
+    val isFactoryDefaultAvailable: Boolean
+        get() = PreciseLayoutEngine.available != null || ActionManager.getInstance().getAction(FACTORY_DEFAULT_ACTION_ID) != null
 
     /**
-     * Applies the IDE's factory default layout to [project]. Like the standard menu, "Default" then
-     * counts as the active layout: no saved layout is active and [isFactoryDefaultActive] is set.
+     * Applies the IDE's factory default layout to the project of [e], an event of the action that asked for
+     * it. Like the standard menu, "Default" then counts as the active layout: no saved layout is active and
+     * [isFactoryDefaultActive] is set.
+     *
+     * The factory default layout can only be read through internal API, so without the precise engine the
+     * IDE's own "Default" action applies it.
      */
-    fun restoreFactoryDefault(project: Project): Boolean {
-        val layout = DesktopLayoutEngine.factoryDefault() ?: return false
-        LayoutEngine.forLayout(layout).apply(project, layout)
+    fun restoreFactoryDefault(e: AnActionEvent): Boolean {
+        val project = e.project ?: return false
+        val precise = PreciseLayoutEngine.available
+        if (precise != null) {
+            val layout = precise.factoryDefault() ?: return false
+            precise.apply(project, layout)
+        } else {
+            val action = ActionManager.getInstance().getAction(FACTORY_DEFAULT_ACTION_ID) ?: return false
+            ActionUtil.performAction(action, e)
+        }
         val store = SolutionLayoutStore.getInstance(project)
         store.activeLayout = null
         store.factoryDefaultActive = true
@@ -87,6 +102,9 @@ object LayoutManager {
         LayoutEngine.forLayout(layout).apply(project, layout)
         return true
     }
+
+    /** The IDE's "Default" of its own layout menu (registered by Rider). */
+    private const val FACTORY_DEFAULT_ACTION_ID = "RestoreFactoryDefaultLayout"
 
     /** Open projects whose active layout may refer to a layout of [scope]. */
     private fun affectedProjects(project: Project, scope: LayoutScope): List<Project> = when (scope) {

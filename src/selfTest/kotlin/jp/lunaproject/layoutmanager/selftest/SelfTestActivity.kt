@@ -13,11 +13,14 @@ import com.intellij.openapi.actionSystem.Toggleable
 import com.intellij.openapi.actionSystem.impl.SimpleDataContext
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.EDT
+import com.intellij.openapi.application.ModalityState
 import com.intellij.openapi.application.PathManager
 import com.intellij.openapi.application.ex.ApplicationEx
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.startup.ProjectActivity
+import com.intellij.openapi.ui.DialogWrapper
 import jp.lunaproject.layoutmanager.LayoutManager
+import jp.lunaproject.layoutmanager.engine.PreciseLayoutEngine
 import jp.lunaproject.layoutmanager.model.LayoutRef
 import jp.lunaproject.layoutmanager.model.LayoutScope
 import jp.lunaproject.layoutmanager.settings.EngineMode
@@ -25,8 +28,15 @@ import jp.lunaproject.layoutmanager.settings.LayoutManagerSettings
 import jp.lunaproject.layoutmanager.settings.LayoutMenu
 import jp.lunaproject.layoutmanager.storage.GlobalLayoutStore
 import jp.lunaproject.layoutmanager.storage.SolutionLayoutStore
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.awt.Dialog
+import java.awt.Window
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.io.path.readLines
@@ -36,15 +46,29 @@ import kotlin.io.path.writeLines
  * In-IDE self-test run by `./gradlew selfTest` (see build.gradle.kts). Ships in a separate test-only
  * plugin that is installed into the self-test sandbox only.
  *
- * - phase1: exercises both engines and the layout operations, leaves a known layout and exits.
+ * - phase1: exercises the engines and the layout operations, leaves a known layout and exits.
  * - phase2: after the restart, checks that the last-session layout and the saved layouts survived.
+ *
+ * Runs with Layout Manager alone ("basic" variant) and with Layout Manager Advanced ("advanced").
  */
 class SelfTestActivity : ProjectActivity {
+    /** Whether Layout Manager Advanced is installed: precise engine and standard menu. */
+    private val advanced get() = PreciseLayoutEngine.isInstalled
+
+    /** The engines under test. The first one saves the layouts that the later checks use. */
+    private val engines get() = if (advanced) listOf(EngineMode.PRECISE, EngineMode.PUBLIC_API) else listOf(EngineMode.PUBLIC_API)
+
+    /** Name prefix of the layouts saved by the first engine. */
+    private val lead get() = engines.first().label
+
     override suspend fun execute(project: Project) {
         val phase = System.getProperty(PHASE_PROPERTY) ?: return
         val outDir = Path.of(System.getProperty(OUT_PROPERTY))
         val log = SelfTestLog(outDir.resolve("$phase.log"))
+        val dialogCloser = closeStartupDialogs(log)
         try {
+            val variant = System.getProperty(VARIANT_PROPERTY)
+            log.check("$variant variant: Layout Manager Advanced installed=$advanced", advanced == (variant == "advanced"))
             val windows = TestWindows.await(project)
             log.info("test windows: ${windows.ids}")
             when (phase) {
@@ -56,6 +80,7 @@ class SelfTestActivity : ProjectActivity {
         } catch (t: Throwable) {
             log.fail("exception", t.stackTraceToString())
         } finally {
+            dialogCloser.cancel()
             log.done()
             // Exit like File | Exit does, saving settings, outside of this startup activity.
             ApplicationManager.getApplication().invokeLater {
@@ -64,13 +89,31 @@ class SelfTestActivity : ProjectActivity {
         }
     }
 
+    /**
+     * A fresh sandbox opens first-launch dialogs (New UI onboarding, promotions). Their modal loop blocks
+     * the EDT work of the test, and the test itself opens none, so any modal dialog is closed while it runs.
+     */
+    private fun closeStartupDialogs(log: SelfTestLog): Job = CoroutineScope(Dispatchers.Default).launch {
+        while (isActive) {
+            ApplicationManager.getApplication().invokeLater({
+                for (window in Window.getWindows()) {
+                    if (window !is Dialog || !window.isShowing || !window.isModal) continue
+                    val dialog = DialogWrapper.findInstance(window) ?: continue
+                    log.info("closed startup dialog: ${window.title} (${dialog.javaClass.name})")
+                    dialog.close(DialogWrapper.CANCEL_EXIT_CODE)
+                }
+            }, ModalityState.any())
+            delay(1000)
+        }
+    }
+
     private suspend fun phase1(project: Project, log: SelfTestLog, outDir: Path, windows: TestWindows) {
         resetState(project)
         withContext(Dispatchers.EDT) { checkPlaceholders(project, log, "no saved layouts", layoutsMenuChildren(project)) }
         val settings = LayoutManagerSettings.getInstance()
-        lateinit var preciseS1: FrameSnapshot
+        lateinit var leadS1: FrameSnapshot
 
-        for (mode in EngineMode.entries) {
+        for (mode in engines) {
             settings.engineMode = mode
             val engine = mode.label
 
@@ -78,7 +121,7 @@ class SelfTestActivity : ProjectActivity {
             val s1 = LayoutRef(LayoutScope.GLOBAL, "$engine-S1")
             withContext(Dispatchers.EDT) { LayoutManager.save(project, s1) }
             val expected1 = awaitSettled(project)
-            if (mode == EngineMode.PRECISE) preciseS1 = expected1
+            if (mode == engines.first()) leadS1 = expected1
 
             setUpState2(project, windows)
             val s2 = LayoutRef(LayoutScope.SOLUTION, "$engine-S2")
@@ -98,24 +141,26 @@ class SelfTestActivity : ProjectActivity {
             log.check("$engine active layout after apply S2", LayoutManager.activeLayout(project) == s2)
         }
 
-        // With the public API engine selected, a layout saved by the precise engine must still apply;
-        // only what public API can restore is compared.
-        settings.engineMode = EngineMode.PUBLIC_API
-        setUpState2(project, windows)
-        withContext(Dispatchers.EDT) { LayoutManager.apply(project, LayoutRef(LayoutScope.GLOBAL, "precise-S1")) }
-        report(log, "public engine applies precise-format S1",
-            diff(preciseS1, awaitSettled(project), keys = setOf("anchor", "visible", "split", "type")))
+        if (advanced) {
+            // With the public API engine selected, a layout saved by the precise engine must still apply
+            // (as after uninstalling Layout Manager Advanced); only what public API can restore is compared.
+            settings.engineMode = EngineMode.PUBLIC_API
+            setUpState2(project, windows)
+            withContext(Dispatchers.EDT) { LayoutManager.apply(project, LayoutRef(LayoutScope.GLOBAL, "precise-S1")) }
+            report(log, "public engine applies precise-format S1",
+                diff(leadS1, awaitSettled(project), keys = setOf("anchor", "visible", "split", "type")))
+        }
 
         settings.engineMode = EngineMode.PRECISE
         settings.restoreOnStartup = true
         withContext(Dispatchers.EDT) {
             checkOperations(project, log)
-            checkStandardLayoutsMenu(project, log)
+            if (advanced) checkStandardLayoutsMenu(project, log) else checkWithoutAdvanced(project, log)
         }
-        checkLayoutManagerMenu(project, log, windows, preciseS1)
+        checkLayoutManagerMenu(project, log, windows, leadS1)
 
         // Leave a known layout and record the frame for phase 2, which expects it to be restored.
-        withContext(Dispatchers.EDT) { LayoutManager.apply(project, LayoutRef(LayoutScope.GLOBAL, "precise-S1")) }
+        withContext(Dispatchers.EDT) { LayoutManager.apply(project, LayoutRef(LayoutScope.GLOBAL, "$lead-S1")) }
         outDir.resolve(EXIT_STATE_FILE).writeLines(awaitSettled(project).serialize())
         log.info("exit state recorded, active=${LayoutManager.activeLayout(project)}")
     }
@@ -152,8 +197,8 @@ class SelfTestActivity : ProjectActivity {
     private fun checkOperations(project: Project, log: SelfTestLog) {
         val global = LayoutManager.names(project, LayoutScope.GLOBAL)
         val solution = LayoutManager.names(project, LayoutScope.SOLUTION)
-        log.check("global names $global", global == listOf("precise-S1", "public-S1"))
-        log.check("solution names $solution", solution == listOf("precise-S2", "public-S2"))
+        log.check("global names $global", global == engines.map { "${it.label}-S1" }.sorted())
+        log.check("solution names $solution", solution == engines.map { "${it.label}-S2" }.sorted())
 
         val tmp = LayoutRef(LayoutScope.GLOBAL, "tmp")
         LayoutManager.save(project, tmp)
@@ -167,13 +212,33 @@ class SelfTestActivity : ProjectActivity {
         log.check("delete clears active layout", LayoutManager.activeLayout(project) == null)
         log.check("delete of missing layout fails", !LayoutManager.delete(project, renamed))
 
-        val sameName = LayoutRef(LayoutScope.SOLUTION, "precise-S1")
+        val sameName = LayoutRef(LayoutScope.SOLUTION, "$lead-S1")
         LayoutManager.save(project, sameName)
         log.check("same name allowed in both scopes",
-            LayoutManager.exists(project, sameName) && LayoutManager.exists(project, LayoutRef(LayoutScope.GLOBAL, "precise-S1")))
+            LayoutManager.exists(project, sameName) && LayoutManager.exists(project, LayoutRef(LayoutScope.GLOBAL, "$lead-S1")))
         LayoutManager.delete(project, sameName)
         log.check("deleting solution layout keeps global one",
-            LayoutManager.exists(project, LayoutRef(LayoutScope.GLOBAL, "precise-S1")))
+            LayoutManager.exists(project, LayoutRef(LayoutScope.GLOBAL, "$lead-S1")))
+    }
+
+    /**
+     * Without Layout Manager Advanced there is no standard menu: a stored choice of it falls back to Layout
+     * Manager's menu, and Rider's own "Default" action (used for "Default") is left as Rider registered it.
+     */
+    private fun checkWithoutAdvanced(project: Project, log: SelfTestLog) {
+        val actionManager = ActionManager.getInstance()
+        log.check("no standard menu without Advanced", actionManager.getAction("LayoutManager.StandardLayouts") == null)
+        val factoryDefault = actionManager.getAction("RestoreFactoryDefaultLayout")
+        log.check("Rider's Default action untouched (${factoryDefault?.javaClass?.simpleName})",
+            factoryDefault?.javaClass?.name == "com.intellij.ide.actions.RestoreFactoryDefaultLayoutAction")
+
+        val settings = LayoutManagerSettings.getInstance()
+        settings.layoutMenu = LayoutMenu.STANDARD
+        val shown = updated(project, actionManager.getAction("LayoutManager.Layouts")).isVisible
+        log.check("stored standard menu choice falls back to Layout Manager's menu (shown=$shown)",
+            shown && settings.effectiveLayoutMenu == LayoutMenu.LAYOUT_MANAGER)
+        settings.layoutMenu = LayoutMenu.LAYOUT_MANAGER
+        checkRiderLayoutSettings(project, log, LayoutMenu.LAYOUT_MANAGER)
     }
 
     /** The platform's layout actions Rider unregisters are back, and only the chosen layout menu is shown. */
@@ -252,9 +317,9 @@ class SelfTestActivity : ProjectActivity {
      * Window | Layouts is laid out like the standard menu, and Shift+F12 ("RestoreDefaultLayout") and
      * "Default" act on Layout Manager's layouts while it is the chosen menu.
      */
-    private suspend fun checkLayoutManagerMenu(project: Project, log: SelfTestLog, windows: TestWindows, preciseS1: FrameSnapshot) {
+    private suspend fun checkLayoutManagerMenu(project: Project, log: SelfTestLog, windows: TestWindows, leadS1: FrameSnapshot) {
         val actionManager = ActionManager.getInstance()
-        val s1 = LayoutRef(LayoutScope.GLOBAL, "precise-S1")
+        val s1 = LayoutRef(LayoutScope.GLOBAL, "$lead-S1")
         withContext(Dispatchers.EDT) { LayoutManager.apply(project, s1) }
         awaitSettled(project)
 
@@ -272,12 +337,12 @@ class SelfTestActivity : ProjectActivity {
             fun itemActions(name: String) = children.filterIsInstance<ActionGroup>()
                 .first { it.templatePresentation.text == name }
                 .getChildren(null)
-            val active = itemActions("precise-S1")
+            val active = itemActions("$lead-S1")
             log.check("active layout offers Restore / Save Changes / Rename / --- / Delete: ${active.map { it.javaClass.simpleName }}",
                 active.map { it.javaClass.simpleName } ==
                     listOf("RestoreLayoutAction", "SaveLayoutChangesAction", "RenameLayoutAction", "Separator", "DeleteLayoutAction"))
             log.check("active layout cannot be deleted", !updated(project, active.last()).isEnabled)
-            val other = itemActions("public-S1")
+            val other = itemActions("$lead-S2")
             log.check("other layouts offer Apply / Rename / --- / Delete: ${other.map { it.javaClass.simpleName }}",
                 other.map { it.javaClass.simpleName } == listOf("ApplyLayoutAction", "RenameLayoutAction", "Separator", "DeleteLayoutAction"))
             log.check("other layouts can be deleted", updated(project, other.last()).isEnabled)
@@ -293,9 +358,13 @@ class SelfTestActivity : ProjectActivity {
             log.check("Restore Current Layout enabled for Layout Manager", presentation.isEnabled)
             restore.actionPerformed(event)
         }
-        report(log, "Restore Current Layout restores Layout Manager's active layout", diff(preciseS1, awaitSettled(project)))
+        report(log, "Restore Current Layout restores Layout Manager's active layout", diff(leadS1, awaitSettled(project)),
+            limitations = if (advanced) emptySet() else setOf("bounds"))
 
-        val restored = withContext(Dispatchers.EDT) { LayoutManager.restoreFactoryDefault(project) }
+        val restored = withContext(Dispatchers.EDT) {
+            val default = actionManager.getAction("LayoutManager.RestoreFactoryDefault")
+            LayoutManager.restoreFactoryDefault(event(project, default.templatePresentation.clone()))
+        }
         awaitSettled(project)
         log.check("Default applies the factory layout and clears the active layout",
             restored && LayoutManager.activeLayout(project) == null)
@@ -336,13 +405,17 @@ class SelfTestActivity : ProjectActivity {
 
     private suspend fun phase2(project: Project, log: SelfTestLog, outDir: Path) {
         val expected = deserializeSnapshot(outDir.resolve(EXIT_STATE_FILE).readLines())
-        report(log, "last-session layout restored on open", diff(expected, awaitSettled(project)))
+        // Public API cannot move floating windows: their bounds are whatever the IDE restored by itself.
+        report(log, "last-session layout restored on open", diff(expected, awaitSettled(project)),
+            limitations = if (advanced) emptySet() else setOf("bounds"))
 
-        log.check("global layouts persisted", LayoutManager.names(project, LayoutScope.GLOBAL) == listOf("precise-S1", "public-S1"))
-        log.check("solution layouts persisted", LayoutManager.names(project, LayoutScope.SOLUTION) == listOf("precise-S2", "public-S2"))
-        log.check("active layout persisted", LayoutManager.activeLayout(project) == LayoutRef(LayoutScope.GLOBAL, "precise-S1"))
+        log.check("global layouts persisted",
+            LayoutManager.names(project, LayoutScope.GLOBAL) == engines.map { "${it.label}-S1" }.sorted())
+        log.check("solution layouts persisted",
+            LayoutManager.names(project, LayoutScope.SOLUTION) == engines.map { "${it.label}-S2" }.sorted())
+        log.check("active layout persisted", LayoutManager.activeLayout(project) == LayoutRef(LayoutScope.GLOBAL, "$lead-S1"))
 
-        val s2 = LayoutRef(LayoutScope.SOLUTION, "precise-S2")
+        val s2 = LayoutRef(LayoutScope.SOLUTION, "$lead-S2")
         log.check("saved layout applies after restart", withContext(Dispatchers.EDT) { LayoutManager.apply(project, s2) })
     }
 
@@ -386,6 +459,7 @@ class SelfTestActivity : ProjectActivity {
     private companion object {
         const val PHASE_PROPERTY = "layoutmanager.selftest.phase"
         const val OUT_PROPERTY = "layoutmanager.selftest.out"
+        const val VARIANT_PROPERTY = "layoutmanager.selftest.variant"
         const val EXIT_STATE_FILE = "exit-state.txt"
     }
 }

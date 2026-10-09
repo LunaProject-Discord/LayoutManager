@@ -53,8 +53,7 @@ class RestoreFactoryDefaultAction : DumbAwareToggleAction() {
     override fun isSelected(e: AnActionEvent): Boolean = e.project?.let(LayoutManager::isFactoryDefaultActive) == true
 
     override fun setSelected(e: AnActionEvent, state: Boolean) {
-        val project = e.project ?: return
-        LayoutManager.restoreFactoryDefault(project)
+        LayoutManager.restoreFactoryDefault(e)
     }
 }
 
@@ -77,7 +76,7 @@ abstract class CurrentLayoutRouterAction(private val standard: AnAction) : AnAct
     override fun actionPerformed(e: AnActionEvent) {
         if (isLayoutManagerMenuChosen()) {
             val project = e.project ?: return
-            perform(project)
+            perform(e, project)
         } else {
             standard.actionPerformed(e)
         }
@@ -85,7 +84,7 @@ abstract class CurrentLayoutRouterAction(private val standard: AnAction) : AnAct
 
     protected open fun hasCurrentLayout(project: Project): Boolean = LayoutManager.activeLayout(project) != null
 
-    protected abstract fun perform(project: Project)
+    protected abstract fun perform(e: AnActionEvent, project: Project)
 }
 
 /** "Restore Current Layout": re-applies the active layout (or "Default"), discarding changes made since. */
@@ -93,18 +92,18 @@ class RestoreCurrentLayoutAction : CurrentLayoutRouterAction(RestoreDefaultLayou
     override fun hasCurrentLayout(project: Project) =
         super.hasCurrentLayout(project) || LayoutManager.isFactoryDefaultActive(project)
 
-    override fun perform(project: Project) {
+    override fun perform(e: AnActionEvent, project: Project) {
         val active = LayoutManager.activeLayout(project)
-        if (active != null) LayoutManager.apply(project, active) else LayoutManager.restoreFactoryDefault(project)
+        if (active != null) LayoutManager.apply(project, active) else LayoutManager.restoreFactoryDefault(e)
     }
 }
 
 /** "Save Changes in Current Layout": overwrites the active layout with the current one. */
 class SaveCurrentLayoutAction : CurrentLayoutRouterAction(StoreDefaultLayoutAction()) {
-    override fun perform(project: Project) {
+    override fun perform(e: AnActionEvent, project: Project) {
         LayoutManager.activeLayout(project)?.let { LayoutManager.save(project, it) }
     }
 }
 
-/** Layout Manager's own actions are hidden while the standard layout menu is chosen. */
-internal fun isLayoutManagerMenuChosen() = LayoutManagerSettings.getInstance().layoutMenu == LayoutMenu.LAYOUT_MANAGER
+/** Layout Manager's own actions are hidden while the standard layout menu is in effect. */
+fun isLayoutManagerMenuChosen() = LayoutManagerSettings.getInstance().effectiveLayoutMenu == LayoutMenu.LAYOUT_MANAGER

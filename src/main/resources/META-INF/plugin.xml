@@ -11,7 +11,7 @@
       <li>Restore the active layout, save changes into it, rename or delete layouts, or go back to the default layout.</li>
       <li>Reopen each solution with the tool window layout it had when it was closed.</li>
       <li>Rider's <b>Window | Layout Settings</b> is integrated into the layout menu (optional).</li>
-      <li>Prefer the menu of other JetBrains IDEs? Switch to it in the settings.</li>
+      <li>Optional: the separate Layout Manager Advanced plugin, installable from the settings, adds a precise layout engine and the layout menu of other JetBrains IDEs. It relies on internal IDE API and is distributed on GitHub.</li>
     </ul>
     <p>Find the actions under <b>Window | Layouts</b> and the options under <b>Settings | Tools | Layout Manager</b>.
     The user interface is available in English and Japanese.</p>
@@ -23,7 +23,7 @@
       <li>使用中のレイアウトの復元、変更の保存、名前の変更、削除、デフォルトのレイアウトへの切り替えができます。</li>
       <li>ソリューションを開くと、前回閉じたときのレイアウトを復元します。</li>
       <li>Rider の <b>ウィンドウ | レイアウト設定</b> をレイアウトメニューに統合します (オプション)。</li>
-      <li>他の JetBrains IDE と同じメニューを使いたい場合は、設定で切り替えられます。</li>
+      <li>オプション: 設定からインストールできる別プラグイン Layout Manager Advanced で、正確なレイアウトエンジンと他の JetBrains IDE のレイアウトメニューを追加できます。IDE の内部 API を使うため GitHub で配布しています。</li>
     </ul>
     <p>操作は <b>ウィンドウ | レイアウト</b>、設定は <b>設定 | ツール | Layout Manager</b> にあります。英語と日本語の表示に対応しています。</p>
     ]]></description>
@@ -36,7 +36,7 @@
       <li>Restore, save changes, rename and delete layouts; switch back to the default layout.</li>
       <li>Restores the layout from the last session when a solution is opened.</li>
       <li>Integrates Rider's Window | Layout Settings into the layout menu (optional).</li>
-      <li>Can show the standard layout menu of other JetBrains IDEs instead.</li>
+      <li>Optional Layout Manager Advanced plugin (precise engine, standard layout menu), installable from the settings.</li>
       <li>English and Japanese user interface.</li>
     </ul>
     <p>初回公開版です。</p>
@@ -45,7 +45,7 @@
       <li>レイアウトの復元、変更の保存、名前の変更、削除、デフォルトのレイアウトへの切り替え。</li>
       <li>ソリューションを開くときに、前回終了時のレイアウトを復元。</li>
       <li>Rider の「ウィンドウ | レイアウト設定」をレイアウトメニューに統合 (オプション)。</li>
-      <li>他の JetBrains IDE の標準メニューへの切り替え。</li>
+      <li>設定からインストールできる別プラグイン Layout Manager Advanced (正確なエンジン、標準メニュー)。</li>
       <li>英語と日本語の表示に対応。</li>
     </ul>
     ]]></change-notes>
@@ -54,6 +54,11 @@
     <depends>com.intellij.modules.rider</depends>
 
     <resource-bundle>messages.LayoutManagerBundle</resource-bundle>
+
+    <extensionPoints>
+        <!-- The precise layout engine, contributed by Layout Manager Advanced (internal API). -->
+        <extensionPoint name="preciseEngine" interface="jp.lunaproject.layoutmanager.engine.PreciseLayoutEngine" dynamic="true"/>
+    </extensionPoints>
 
     <extensions defaultExtensionNs="com.intellij">
         <applicationConfigurable parentId="tools" instance="jp.lunaproject.layoutmanager.settings.LayoutManagerConfigurable"
@@ -76,24 +81,14 @@
             <add-to-group group-id="WindowMenu" anchor="after" relative-to-action="RiderWindowLayoutActions"/>
         </group>
 
-        <!-- The platform's "Layouts" menu, whose actions Rider unregisters (all but RestoreFactoryDefaultLayout,
-             which stays registered and is overridden). Same structure and action ids as PlatformActions.xml:
-             CustomLayoutsActionGroup looks up "RestoreDefaultLayout" by id. -->
-        <group id="LayoutManager.StandardLayouts" class="jp.lunaproject.layoutmanager.actions.StandardLayoutsGroup" popup="true">
-            <!-- The platform actions, hidden (also from Find Action) while Layout Manager's menu is chosen. -->
-            <action id="RestoreFactoryDefaultLayout" class="jp.lunaproject.layoutmanager.actions.StandardRestoreFactoryDefaultLayoutAction" overrides="true"/>
-            <separator/>
-            <group id="CustomLayoutsGroup" class="com.intellij.ide.actions.CustomLayoutsActionGroup"/>
-            <separator/>
-            <!-- Routed by the chosen layout menu so that Shift+F12 restores the active layout of either menu. -->
-            <action id="RestoreDefaultLayout" class="jp.lunaproject.layoutmanager.actions.RestoreCurrentLayoutAction"/>
-            <action id="StoreDefaultLayout" class="jp.lunaproject.layoutmanager.actions.SaveCurrentLayoutAction">
-                <synonym key="action.StoreDefaultLayout.synonym"/>
-            </action>
-            <action id="StoreNewLayout" class="jp.lunaproject.layoutmanager.actions.StandardStoreNewLayoutAction"/>
-            <reference ref="LayoutManager.RiderLayoutScope"/>
-            <add-to-group group-id="WindowMenu" anchor="after" relative-to-action="LayoutManager.Layouts"/>
-        </group>
+        <!-- Platform action ids that Rider unregisters, routed by the chosen layout menu so that Shift+F12 restores
+             the active layout of either menu. The standard menu itself (LayoutManager.StandardLayouts) is internal
+             API and contributed by Layout Manager Advanced, whose CustomLayoutsActionGroup looks up
+             "RestoreDefaultLayout" by id. -->
+        <action id="RestoreDefaultLayout" class="jp.lunaproject.layoutmanager.actions.RestoreCurrentLayoutAction"/>
+        <action id="StoreDefaultLayout" class="jp.lunaproject.layoutmanager.actions.SaveCurrentLayoutAction">
+            <synonym key="action.StoreDefaultLayout.synonym"/>
+        </action>
 
         <!-- Rider's Window | Layout Settings, overridden to be hidden while integrated into the layout menu (option in
              Settings | Tools | Layout Manager). Same structure as Rider's definition; the default layout actions are

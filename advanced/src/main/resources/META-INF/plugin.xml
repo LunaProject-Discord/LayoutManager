@@ -1,0 +1,61 @@
+<idea-plugin>
+    <id>jp.lunaproject.layoutmanager.advanced</id>
+    <name>Layout Manager Advanced</name>
+    <vendor>Luna Project</vendor>
+
+    <description><![CDATA[
+    <p>Adds the parts of <b>Layout Manager</b> that rely on internal IDE API, so it is distributed on GitHub
+    instead of JetBrains Marketplace. Requires Layout Manager.</p>
+    <ul>
+      <li>Precise layout engine: also restores the order of tool window buttons and floating window bounds,
+          and "Default" without changing the IDE's own layout state.</li>
+      <li>The layout menu of other JetBrains IDEs, selectable in <b>Settings | Tools | Layout Manager</b>.</li>
+    </ul>
+    <p>Internal IDE API can change in any IDE update, so this plugin may stop working until it is updated.
+    Without it, Layout Manager keeps working with its public API engine.</p>
+    <hr/>
+    <p><b>Layout Manager</b> のうち、IDE の内部 API を使う機能を追加します。そのため JetBrains Marketplace ではなく GitHub で配布しています。
+    Layout Manager が必要です。</p>
+    <ul>
+      <li>正確なレイアウトエンジン: ツールウィンドウのボタンの並び順やフローティングウィンドウの位置も復元し、IDE 自体のレイアウトの状態を変えずに「デフォルト」を適用します。</li>
+      <li>他の JetBrains IDE のレイアウトメニュー (<b>設定 | ツール | Layout Manager</b> で選択)。</li>
+    </ul>
+    <p>内部 API は IDE の更新で変わることがあるため、更新版が出るまで動作しなくなる可能性があります。
+    このプラグインがなくても、Layout Manager は公開 API のエンジンで動作します。</p>
+    ]]></description>
+
+    <change-notes><![CDATA[
+    <h3>1.0.0</h3>
+    <p>First release: the precise layout engine and the standard layout menu, split from Layout Manager.</p>
+    <p>初回リリース: 正確なレイアウトエンジンと標準のレイアウトメニューを Layout Manager から分離。</p>
+    ]]></change-notes>
+
+    <depends>com.intellij.modules.platform</depends>
+    <depends>com.intellij.modules.rider</depends>
+    <depends>jp.lunaproject.layoutmanager</depends>
+
+    <resource-bundle>messages.LayoutManagerAdvancedBundle</resource-bundle>
+
+    <extensions defaultExtensionNs="jp.lunaproject.layoutmanager">
+        <preciseEngine implementation="jp.lunaproject.layoutmanager.advanced.DesktopLayoutEngine"/>
+    </extensions>
+
+    <actions>
+        <!-- The platform's "Layouts" menu, whose actions Rider unregisters (all but RestoreFactoryDefaultLayout,
+             which stays registered and is overridden). Same structure and action ids as PlatformActions.xml;
+             RestoreDefaultLayout and StoreDefaultLayout are registered by Layout Manager, which routes them by
+             the chosen layout menu. Shown only while chosen in Settings | Tools | Layout Manager. -->
+        <group id="LayoutManager.StandardLayouts" class="jp.lunaproject.layoutmanager.advanced.StandardLayoutsGroup" popup="true">
+            <!-- The platform actions, hidden (also from Find Action) while Layout Manager's menu is chosen. -->
+            <action id="RestoreFactoryDefaultLayout" class="jp.lunaproject.layoutmanager.advanced.StandardRestoreFactoryDefaultLayoutAction" overrides="true"/>
+            <separator/>
+            <group id="CustomLayoutsGroup" class="com.intellij.ide.actions.CustomLayoutsActionGroup"/>
+            <separator/>
+            <reference ref="RestoreDefaultLayout"/>
+            <reference ref="StoreDefaultLayout"/>
+            <action id="StoreNewLayout" class="jp.lunaproject.layoutmanager.advanced.StandardStoreNewLayoutAction"/>
+            <reference ref="LayoutManager.RiderLayoutScope"/>
+            <add-to-group group-id="WindowMenu" anchor="after" relative-to-action="LayoutManager.Layouts"/>
+        </group>
+    </actions>
+</idea-plugin>

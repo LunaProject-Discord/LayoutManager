@@ -1,4 +1,4 @@
-package jp.lunaproject.layoutmanager.engine
+package jp.lunaproject.layoutmanager.advanced
 
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.diagnostic.logger
@@ -6,38 +6,22 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.wm.ex.ToolWindowManagerEx
 import com.intellij.openapi.wm.impl.DesktopLayout
 import com.intellij.toolWindow.ToolWindowDefaultLayoutManager
+import jp.lunaproject.layoutmanager.engine.PreciseLayoutEngine
 import org.jdom.Element
 
 /**
- * [LayoutEngine] backed by the platform's [DesktopLayout], the same mechanism the
- * "Window | Layouts" feature of other JetBrains IDEs uses. Restores order, weights, split and
- * floating bounds exactly, but relies on internal API.
+ * Layout Manager's precise engine, backed by the platform's [DesktopLayout], the same mechanism the
+ * "Window | Layouts" feature of other JetBrains IDEs uses. Restores order, weights, split and floating
+ * bounds exactly, but relies on internal API.
  */
-internal object DesktopLayoutEngine : LayoutEngine {
-    private val LOG = logger<DesktopLayoutEngine>()
-
-    /** Whether the internal API this engine needs exists and behaves as expected in this IDE build. */
-    val isAvailable: Boolean by lazy {
-        try {
-            val element = DesktopLayout().writeExternal(DesktopLayout.TAG) ?: Element(DesktopLayout.TAG)
-            DesktopLayout().readExternal(element)
-            ToolWindowManagerEx::class.java.getMethod("getLayout")
-            ToolWindowManagerEx::class.java.getMethod("setLayout", DesktopLayout::class.java)
-            true
-        } catch (e: LinkageError) {
-            LOG.warn("Precise layout engine is unavailable, falling back to public API", e)
-            false
-        } catch (e: ReflectiveOperationException) {
-            LOG.warn("Precise layout engine is unavailable, falling back to public API", e)
-            false
-        }
-    }
+class DesktopLayoutEngine : PreciseLayoutEngine {
+    override val isAvailable: Boolean get() = Companion.isAvailable
 
     /**
      * The IDE's factory default layout, as used by "Default" in the standard layout menu. Read without
      * touching the standard menu's own state. `null` when the internal API is unavailable.
      */
-    fun factoryDefault(): Element? {
+    override fun factoryDefault(): Element? {
         if (!isAvailable) return null
         return try {
             ToolWindowDefaultLayoutManager.getInstance().getFactoryDefaultLayoutCopy().writeExternal(DesktopLayout.TAG)
@@ -72,5 +56,25 @@ internal object DesktopLayoutEngine : LayoutEngine {
         }, project.disposed)
     }
 
-    const val WINDOW_INFO = "window_info"
+    private companion object {
+        val LOG = logger<DesktopLayoutEngine>()
+        const val WINDOW_INFO = "window_info"
+
+        /** Whether the internal API this engine needs exists and behaves as expected in this IDE build. */
+        val isAvailable: Boolean by lazy {
+            try {
+                val element = DesktopLayout().writeExternal(DesktopLayout.TAG) ?: Element(DesktopLayout.TAG)
+                DesktopLayout().readExternal(element)
+                ToolWindowManagerEx::class.java.getMethod("getLayout")
+                ToolWindowManagerEx::class.java.getMethod("setLayout", DesktopLayout::class.java)
+                true
+            } catch (e: LinkageError) {
+                LOG.warn("Precise layout engine is unavailable, falling back to public API", e)
+                false
+            } catch (e: ReflectiveOperationException) {
+                LOG.warn("Precise layout engine is unavailable, falling back to public API", e)
+                false
+            }
+        }
+    }
 }

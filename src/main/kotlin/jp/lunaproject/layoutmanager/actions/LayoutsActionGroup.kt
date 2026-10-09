@@ -27,7 +27,7 @@ class LayoutsActionGroup : ActionGroup(), DumbAware {
 
     override fun update(e: AnActionEvent) {
         e.presentation.isEnabledAndVisible =
-            e.project != null && LayoutManagerSettings.getInstance().layoutMenu == LayoutMenu.LAYOUT_MANAGER
+            e.project != null && isLayoutManagerMenuChosen()
     }
 
     override fun getChildren(e: AnActionEvent?): Array<AnAction> {

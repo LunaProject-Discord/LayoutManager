@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Custom plugin repository for Layout Manager Advanced, which is not on JetBrains Marketplace.
+  Layout Manager adds this file's raw URL to the IDE's plugin repositories when the user installs
+  Layout Manager Advanced from Settings | Tools | Layout Manager, so the IDE also offers its updates.
+  Update `url`, `version` and `idea-version` together with each release (see README).
+-->
+<plugins>
+    <plugin id="jp.lunaproject.layoutmanager.advanced"
+            url="https://github.com/LunaProject-Discord/LayoutManager/releases/download/advanced-v1.0.0/LayoutManagerAdvanced-1.0.0-signed.zip"
+            version="1.0.0">
+        <idea-version since-build="261" until-build="263.*"/>
+        <name>Layout Manager Advanced</name>
+        <vendor>Luna Project</vendor>
+        <description>Precise layout engine and the standard layout menu for Layout Manager. Uses internal IDE API.</description>
+    </plugin>
+</plugins>

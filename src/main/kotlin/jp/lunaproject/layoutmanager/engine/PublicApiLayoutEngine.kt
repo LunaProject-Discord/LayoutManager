@@ -21,6 +21,9 @@ internal object PublicApiLayoutEngine : LayoutEngine {
     const val TAG = "publicLayout"
     private const val WINDOW = "window"
 
+    /** A tool window of a [PreciseLayoutEngine] snapshot. */
+    private const val DESKTOP_WINDOW_INFO = "window_info"
+
     override fun capture(project: Project): Element {
         val manager = ToolWindowManager.getInstance(project)
         val root = Element(TAG)
@@ -82,14 +85,14 @@ internal object PublicApiLayoutEngine : LayoutEngine {
     }
 
     /**
-     * Converts a snapshot of [DesktopLayoutEngine] (the platform's `window_info` XML) to this engine's
+     * Converts a snapshot of a [PreciseLayoutEngine] (the platform's `window_info` XML) to this engine's
      * format, so layouts saved with the precise engine still apply when only public API is usable.
      * Docked sizes are derived from the stored weights and the current frame size.
      */
     private fun fromDesktopFormat(project: Project, layout: Element): Element {
         val frame = WindowManager.getInstance().getFrame(project)?.rootPane?.size
         val root = Element(TAG)
-        for (info in layout.getChildren(DesktopLayoutEngine.WINDOW_INFO)) {
+        for (info in layout.getChildren(DESKTOP_WINDOW_INFO)) {
             val id = info.getAttributeValue("id") ?: continue
             val weight = info.getAttributeValue("weight")?.toFloatOrNull()
             val window = Element(WINDOW)

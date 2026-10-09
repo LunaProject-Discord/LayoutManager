@@ -1,4 +1,4 @@
-package jp.lunaproject.layoutmanager.actions
+package jp.lunaproject.layoutmanager.advanced
 
 import com.intellij.ide.actions.RestoreFactoryDefaultLayoutAction
 import com.intellij.ide.actions.StoreNewLayoutAction
@@ -8,8 +8,7 @@ import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.actionSystem.DefaultActionGroup
 import com.intellij.openapi.project.DumbAware
 import com.intellij.openapi.project.DumbAwareToggleAction
-import jp.lunaproject.layoutmanager.settings.LayoutManagerSettings
-import jp.lunaproject.layoutmanager.settings.LayoutMenu
+import jp.lunaproject.layoutmanager.actions.isLayoutManagerMenuChosen
 
 /**
  * Window | Layouts of the standard menu: the platform's own "Layouts" menu of other JetBrains IDEs, which Rider
@@ -20,8 +19,7 @@ class StandardLayoutsGroup : DefaultActionGroup(), DumbAware {
     override fun getActionUpdateThread() = ActionUpdateThread.BGT
 
     override fun update(e: AnActionEvent) {
-        e.presentation.isEnabledAndVisible =
-            e.project != null && LayoutManagerSettings.getInstance().layoutMenu == LayoutMenu.STANDARD
+        e.presentation.isEnabledAndVisible = e.project != null && !isLayoutManagerMenuChosen()
     }
 }
 

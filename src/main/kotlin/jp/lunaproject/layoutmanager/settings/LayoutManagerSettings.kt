@@ -1,5 +1,6 @@
 package jp.lunaproject.layoutmanager.settings
 
+import com.intellij.openapi.actionSystem.ActionManager
 import com.intellij.openapi.components.BaseState
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.SimplePersistentStateComponent
@@ -9,7 +10,7 @@ import com.intellij.openapi.components.service
 
 /** How layouts are captured and applied. */
 enum class EngineMode {
-    /** Platform layout model (internal API); falls back to [PUBLIC_API] when it is unavailable. */
+    /** The platform's layout model, contributed by Layout Manager Advanced (internal API); [PUBLIC_API] without it. */
     PRECISE,
 
     /** Public tool window API only. */
@@ -21,7 +22,10 @@ enum class LayoutMenu {
     /** Window | Layouts of this plugin. */
     LAYOUT_MANAGER,
 
-    /** Window | Layouts as in other JetBrains IDEs: the platform's own layout actions, hidden by Rider. */
+    /**
+     * Window | Layouts as in other JetBrains IDEs: the platform's own layout actions, hidden by Rider. They are
+     * internal API, so Layout Manager Advanced contributes this menu; [LAYOUT_MANAGER] is used without it.
+     */
     STANDARD,
 }
 
@@ -53,6 +57,10 @@ class LayoutManagerSettings : SimplePersistentStateComponent<LayoutManagerSettin
             state.layoutMenu = value
         }
 
+    /** The layout menu in effect: [LayoutMenu.STANDARD] only while Layout Manager Advanced provides it. */
+    val effectiveLayoutMenu: LayoutMenu
+        get() = if (layoutMenu == LayoutMenu.STANDARD && isStandardMenuInstalled) LayoutMenu.STANDARD else LayoutMenu.LAYOUT_MANAGER
+
     /** Rider's Window | Layout Settings is hidden and its layout scope switches are shown in the layout menu. */
     var integrateRiderLayoutSettings: Boolean
         get() = state.integrateRiderLayoutSettings
@@ -61,6 +69,12 @@ class LayoutManagerSettings : SimplePersistentStateComponent<LayoutManagerSettin
         }
 
     companion object {
+        /** The standard layout menu, registered by Layout Manager Advanced. */
+        const val STANDARD_MENU_ID = "LayoutManager.StandardLayouts"
+
         fun getInstance(): LayoutManagerSettings = service()
+
+        /** Whether Layout Manager Advanced provides the standard layout menu. */
+        val isStandardMenuInstalled: Boolean get() = ActionManager.getInstance().getAction(STANDARD_MENU_ID) != null
     }
 }

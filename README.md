@@ -11,10 +11,22 @@ Named tool window layouts for JetBrains Rider, like **Window | Layouts** in othe
 - Restore the active layout, save changes into it, rename or delete layouts, or go back to the default layout.
 - Reopen each solution with the tool window layout it had when it was closed.
 - Rider's **Window | Layout Settings** is integrated into the layout menu (optional).
-- Prefer the menu of other JetBrains IDEs? Switch to it in the settings.
 - English and Japanese user interface.
 
 The actions are under **Window | Layouts**, the options under **Settings | Tools | Layout Manager**.
+
+### Layout Manager Advanced
+
+An optional, separate plugin (in [`advanced`](advanced)) with the features that rely on internal IDE API, which
+JetBrains Marketplace does not accept. It is distributed here on GitHub:
+
+- A precise layout engine that also restores the order of tool window buttons and floating window bounds.
+- The layout menu of other JetBrains IDEs, selectable instead of Layout Manager's.
+
+Install it with **Install Layout Manager Advanced…** in **Settings | Tools | Layout Manager**. After a confirmation,
+this adds the plugin repository [`updatePlugins.xml`](updatePlugins.xml) to **Settings | Plugins | Manage Plugin
+Repositories**, so the IDE installs it and offers its updates. Internal API can change in any IDE update, so it may
+stop working until it is updated; Layout Manager itself keeps working without it.
 
 ## Requirements
 
@@ -30,10 +42,11 @@ plugin ZIP and use **Settings | Plugins | ⚙ | Install Plugin from Disk…**.
 JDK 25 is provisioned by Gradle toolchains.
 
 ```bash
-./gradlew buildPlugin      # build/distributions/LayoutManagerPlugin-<version>.zip
-./gradlew runIde           # run a sandboxed Rider with the plugin
-./gradlew verifyPlugin     # IntelliJ Plugin Verifier
-./gradlew selfTest         # in-IDE self-test (two Rider launches, about a minute and a half)
+./gradlew buildPlugin            # build/distributions/LayoutManagerPlugin-<version>.zip
+./gradlew :advanced:buildPlugin  # advanced/build/distributions/LayoutManagerAdvanced-<version>.zip
+./gradlew runIde                 # run a sandboxed Rider with the plugin
+./gradlew verifyPlugin           # IntelliJ Plugin Verifier; fails on any internal API usage
+./gradlew selfTest               # in-IDE self-test, with and without Layout Manager Advanced (four Rider launches)
 ```
 
 The plugin is built against the oldest supported Rider (`platformVersion`, downloaded from the JetBrains Maven
@@ -100,6 +113,8 @@ export PRIVATE_KEY_PASSWORD='<password>'
 
 The result is `build/distributions/LayoutManagerPlugin-<version>-signed.zip`. To check the signature, run
 `verifyPluginSignature` afterwards as a separate command (Gradle rejects running both tasks in one command).
+Sign Layout Manager Advanced the same way with `:advanced:signPlugin`
+(`advanced/build/distributions/LayoutManagerAdvanced-<version>-signed.zip`).
 
 ### 3. Publish
 
@@ -107,6 +122,12 @@ The result is `build/distributions/LayoutManagerPlugin-<version>-signed.zip`. To
    the signed ZIP, license LGPL 2.1, source code `https://github.com/LunaProject-Discord/LayoutManager`.
 2. Create a token under **My Tokens** in your Marketplace profile and set it as `PUBLISH_TOKEN`.
 3. Publish later versions with `publishPlugin` (signs, verifies and uploads), with the variables above set.
+
+Layout Manager Advanced is released on GitHub instead:
+
+1. Create a release with the tag `advanced-v<version>` and attach the signed ZIP.
+2. Update `url`, `version` and `idea-version` in [`updatePlugins.xml`](updatePlugins.xml) and push it to `main`:
+   installed copies are offered the update from there.
 
 See also [Plugin Signing](https://plugins.jetbrains.com/docs/intellij/plugin-signing.html).
 
@@ -127,10 +148,22 @@ JetBrains Rider に、他の JetBrains IDE の **ウィンドウ | レイアウ�
 - 使用中のレイアウトの復元、変更の保存、名前の変更、削除、デフォルトのレイアウトへの切り替えができます。
 - ソリューションを開くと、前回閉じたときのレイアウトを復元します。
 - Rider の **ウィンドウ | レイアウト設定** をレイアウトメニューに統合します (オプション)。
-- 他の JetBrains IDE と同じメニューを使いたい場合は、設定で切り替えられます。
 - 英語と日本語の表示に対応しています。
 
 操作は **ウィンドウ | レイアウト**、設定は **設定 | ツール | Layout Manager** にあります。
+
+#### Layout Manager Advanced
+
+JetBrains Marketplace では認められない IDE の内部 API を使う機能をまとめた、オプションの別プラグインです ([`advanced`](advanced))。
+GitHub で配布しています。
+
+- ツールウィンドウのボタンの並び順やフローティングウィンドウの位置まで復元する、正確なレイアウトエンジン。
+- Layout Manager のメニューの代わりに選べる、他の JetBrains IDE のレイアウトメニュー。
+
+**設定 | ツール | Layout Manager** の **Layout Manager Advanced をインストール…** からインストールします。確認のあと、
+プラグインリポジトリ [`updatePlugins.xml`](updatePlugins.xml) を **設定 | プラグイン | プラグインリポジトリの管理** に追加し、
+IDE がインストールと更新の通知を行います。内部 API は IDE の更新で変わることがあるため、更新版が出るまで動作しなくなる可能性があります。
+その場合も Layout Manager 自体は動作します。
 
 ### 動作環境
 
@@ -146,10 +179,11 @@ ZIP をダウンロードして **設定 | プラグイン | ⚙ | ディスク�
 JDK 25 は Gradle のツールチェーンで自動的に用意されます。
 
 ```bash
-./gradlew buildPlugin      # build/distributions/LayoutManagerPlugin-<バージョン>.zip
-./gradlew runIde           # プラグインを入れたテスト用の Rider を起動
-./gradlew verifyPlugin     # IntelliJ Plugin Verifier
-./gradlew selfTest         # IDE 内の自己テスト (Rider を2回起動、約1分半)
+./gradlew buildPlugin            # build/distributions/LayoutManagerPlugin-<バージョン>.zip
+./gradlew :advanced:buildPlugin  # advanced/build/distributions/LayoutManagerAdvanced-<バージョン>.zip
+./gradlew runIde                 # プラグインを入れたテスト用の Rider を起動
+./gradlew verifyPlugin           # IntelliJ Plugin Verifier (内部 API を使っていると失敗)
+./gradlew selfTest               # IDE 内の自己テスト。Layout Manager Advanced なし・ありの両方 (Rider を4回起動)
 ```
 
 プラグインは、対応する最も古い Rider (`platformVersion`、JetBrains の Maven リポジトリからダウンロード) に対してビルドし、
@@ -208,6 +242,8 @@ export PRIVATE_KEY_PASSWORD='<パスワード>'
 
 `build/distributions/LayoutManagerPlugin-<バージョン>-signed.zip` ができます。署名を確認する場合は、続けて
 `verifyPluginSignature` を別のコマンドとして実行してください (1つのコマンドで両方を実行すると Gradle がエラーにします)。
+Layout Manager Advanced も同じ方法で `:advanced:signPlugin` を実行して署名します
+(`advanced/build/distributions/LayoutManagerAdvanced-<バージョン>-signed.zip`)。
 
 #### 3. 公開する
 
@@ -215,6 +251,12 @@ export PRIVATE_KEY_PASSWORD='<パスワード>'
    署名済みの ZIP をアップロードし、ライセンスに LGPL 2.1、ソースコードに `https://github.com/LunaProject-Discord/LayoutManager` を指定します。
 2. Marketplace のプロフィールの **My Tokens** でトークンを作成し、`PUBLISH_TOKEN` に設定します。
 3. 2回目以降は、上の環境変数を設定したうえで `publishPlugin` を実行すると公開できます (署名・検証・アップロードを行います)。
+
+Layout Manager Advanced は GitHub で公開します。
+
+1. タグ `advanced-v<バージョン>` でリリースを作り、署名済みの ZIP を添付します。
+2. [`updatePlugins.xml`](updatePlugins.xml) の `url`、`version`、`idea-version` を更新して `main` に push します。
+   インストール済みの環境には、ここから更新が通知されます。
 
 [Plugin Signing](https://plugins.jetbrains.com/docs/intellij/plugin-signing.html) も参照してください。
 
