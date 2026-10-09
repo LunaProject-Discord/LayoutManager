@@ -122,6 +122,7 @@ Sign Layout Manager Advanced the same way with `:advanced:signPlugin`
    the signed ZIP, license LGPL 2.1, source code `https://github.com/LunaProject-Discord/LayoutManager`.
 2. Create a token under **My Tokens** in your Marketplace profile and set it as `PUBLISH_TOKEN`.
 3. Publish later versions with `publishPlugin` (signs, verifies and uploads), with the variables above set.
+4. Tag the released commit `base-v<version>` and create a GitHub release with the signed ZIP.
 
 Layout Manager Advanced is released on GitHub instead:
 
@@ -251,6 +252,7 @@ Layout Manager Advanced も同じ方法で `:advanced:signPlugin` を実行し�
    署名済みの ZIP をアップロードし、ライセンスに LGPL 2.1、ソースコードに `https://github.com/LunaProject-Discord/LayoutManager` を指定します。
 2. Marketplace のプロフィールの **My Tokens** でトークンを作成し、`PUBLISH_TOKEN` に設定します。
 3. 2回目以降は、上の環境変数を設定したうえで `publishPlugin` を実行すると公開できます (署名・検証・アップロードを行います)。
+4. 公開したコミットにタグ `base-v<バージョン>` を付け、署名済みの ZIP を添付した GitHub のリリースを作ります。
 
 Layout Manager Advanced は GitHub で公開します。
 
