@@ -29,6 +29,15 @@
     ]]></description>
 
     <change-notes><![CDATA[
+    <h3>1.0.1</h3>
+    <ul>
+      <li>The settings page shows the options of Layout Manager Advanced as soon as it is installed from there.</li>
+      <li>Shorter confirmation before installing Layout Manager Advanced, which no longer needs scrolling.</li>
+    </ul>
+    <ul>
+      <li>設定画面から Layout Manager Advanced をインストールすると、すぐにその設定項目が表示されるようにしました。</li>
+      <li>Layout Manager Advanced のインストール前の確認を短くし、スクロールせずに読めるようにしました。</li>
+    </ul>
     <h3>1.0.0</h3>
     <p>First public release.</p>
     <ul>
