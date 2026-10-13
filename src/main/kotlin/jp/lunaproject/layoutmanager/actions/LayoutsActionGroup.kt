@@ -1,12 +1,12 @@
 package jp.lunaproject.layoutmanager.actions
 
-import com.intellij.icons.AllIcons
 import com.intellij.openapi.actionSystem.ActionGroup
 import com.intellij.openapi.actionSystem.ActionManager
 import com.intellij.openapi.actionSystem.ActionUpdateThread
 import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.actionSystem.Separator
+import com.intellij.openapi.actionSystem.Toggleable
 import com.intellij.openapi.project.DumbAware
 import com.intellij.openapi.project.DumbAwareAction
 import com.intellij.openapi.project.Project
@@ -78,7 +78,7 @@ private class NoLayoutsPlaceholder : DumbAwareAction(LayoutManagerBundle.message
  * Submenu for one saved layout, as in the standard menu: the active layout offers Restore / Save Changes /
  * Rename / --- / Delete (disabled), the others Apply / Rename / --- / Delete.
  */
-private class LayoutItemGroup(private val ref: LayoutRef, isActive: Boolean) : ActionGroup(), DumbAware {
+private class LayoutItemGroup(private val ref: LayoutRef, private val isActive: Boolean) : ActionGroup(), DumbAware, Toggleable {
     private val children: Array<AnAction> = if (isActive) {
         arrayOf(RestoreLayoutAction(ref), SaveLayoutChangesAction(ref), RenameLayoutAction(ref), Separator.getInstance(), DeleteLayoutAction(ref))
     } else {
@@ -88,10 +88,14 @@ private class LayoutItemGroup(private val ref: LayoutRef, isActive: Boolean) : A
     init {
         isPopup = true
         templatePresentation.setText(ref.name, false)
-        if (isActive) templatePresentation.icon = AllIcons.Actions.Checked
     }
 
     override fun getActionUpdateThread() = ActionUpdateThread.BGT
+
+    /** The active layout is checked like a toggle item, as in the standard menu. */
+    override fun update(e: AnActionEvent) {
+        Toggleable.setSelected(e.presentation, isActive)
+    }
 
     override fun getChildren(e: AnActionEvent?): Array<AnAction> = children
 }

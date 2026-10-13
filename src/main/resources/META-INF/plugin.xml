@@ -29,6 +29,13 @@
     ]]></description>
 
     <change-notes><![CDATA[
+    <h3>1.0.2</h3>
+    <ul>
+      <li>The active layout in Window | Layouts is checked with the same check mark as the other menu items.</li>
+    </ul>
+    <ul>
+      <li>ウィンドウ | レイアウトで使用中のレイアウトのチェックマークを、ほかのメニュー項目と同じ表示にしました。</li>
+    </ul>
     <h3>1.0.1</h3>
     <ul>
       <li>The settings page shows the options of Layout Manager Advanced as soon as it is installed from there.</li>
